@@ -151,7 +151,8 @@ def fetch(folder, name, optional, dest, label):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Download Seestar photos through the tunnel of the Seestar app.')
-    ap.add_argument('--dest', default='~/Pictures/Seestar', help='target folder (default: %(default)s)')
+    ap.add_argument('-o', '--output', '--dest', dest='dest', metavar='DIR', default='~/Pictures/Seestar',
+                    help='folder for the photos (default: %(default)s)')
     ap.add_argument('--folder', action='append', help='only this album folder, e.g. "NGC 292" (repeatable)')
     a = ap.parse_args(argv)
     dest = os.path.expanduser(a.dest)

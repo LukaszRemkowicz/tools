@@ -15,8 +15,8 @@ This script resumes every file from the last byte it received and waits for you 
 
        python3 seestar/seestar_download.py
 
-   Files go to `~/Pictures/Seestar/<album folder>/`. Options: `--dest DIR`, `--folder NAME` (only that album folder,
-   repeatable, e.g. `--folder "NGC 292"`).
+   Files go to `~/Pictures/Seestar/<album folder>/`. Options: `-o DIR` / `--output DIR` (where the photos go),
+   `--folder NAME` (only that album folder, repeatable, e.g. `--folder "NGC 292"`).
 3. Stop with Ctrl-C at any time. Run the same command again to continue. Finished files are skipped and a half-done
    file continues from its `.part`.
 
