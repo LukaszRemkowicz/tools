@@ -11,6 +11,11 @@ ALBUMS = {None: {'path': 'MyWorks', 'list': [{'group_name': 'DeepSky', 'files': 
           'MyWorks/M 42_sub': {'list': [{'files': [{'name': 'Light_M 42_1.fit', 'type': 2}]}]}}
 
 
+def read(*path):
+    with open(os.path.join(*path), 'rb') as f:
+        return f.read()
+
+
 class Rpc(socketserver.StreamRequestHandler):
     def handle(self):
         line = self.rfile.readline()
@@ -18,13 +23,22 @@ class Rpc(socketserver.StreamRequestHandler):
             return                                                    # tunnel_up() probe: connect and close
         req = json.loads(line)
         self.wfile.write(b'{"Event":"PiStatus","temp":30}\r\n')      # events arrive before the reply
-        reply = {'id': req['id'], 'method': req['method'], 'code': 0, 'result': ALBUMS[req.get('params')]}
+        if req['method'] == 'delete_image':
+            Rpc.deleted += req['params']['name']
+            result = 0
+        else:
+            result = ALBUMS[req.get('params')]
+        reply = {'id': req['id'], 'method': req['method'], 'code': 0, 'result': result}
         self.wfile.write(json.dumps(reply).encode() + b'\r\n')
 
 
 class Http(http.server.BaseHTTPRequestHandler):
     log = []
     def log_message(self, *a): pass
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-Length', str(len(FILES[self.path])))
+        self.end_headers()
     def do_GET(self):
         rng = self.headers.get('Range')
         Http.log.append((self.path, rng))
@@ -48,7 +62,7 @@ class Download(unittest.TestCase):
         s.RPC_ADDR = self.rpc.server_address
         s.HTTP_BASE = 'http://127.0.0.1:%d/' % self.http.server_address[1]
         s.RETRY_PAUSE = 0
-        Http.log = []
+        Http.log, Rpc.deleted = [], []
 
     def tearDown(self):
         for srv in (self.rpc, self.http):
@@ -57,8 +71,8 @@ class Download(unittest.TestCase):
     def test_order_resume_and_rerun(self):
         with tempfile.TemporaryDirectory() as dest:
             self.assertEqual(s.main(['--dest', dest]), 0)
-            self.assertEqual(open(os.path.join(dest, 'M 42', 'Stacked_2_M 42.fit'), 'rb').read(), FIT)
-            self.assertEqual(open(os.path.join(dest, 'M 42_sub', 'Light_M 42_1.fit'), 'rb').read(), SUB)
+            self.assertEqual(read(dest, 'M 42', 'Stacked_2_M 42.fit'), FIT)
+            self.assertEqual(read(dest, 'M 42_sub', 'Light_M 42_1.fit'), SUB)
             self.assertFalse(os.path.exists(os.path.join(dest, 'M 42', 'Stacked_2_M 42.jpg')))   # missing twin
             paths = [p for p, _ in Http.log]
             self.assertLess(paths.index('/MyWorks/M%2042/Stacked_2_M%2042.fit'),
@@ -67,6 +81,18 @@ class Download(unittest.TestCase):
             Http.log = []
             s.main(['--dest', dest])
             self.assertEqual([p for p, _ in Http.log], ['/MyWorks/M%2042/Stacked_2_M%2042.jpg'])  # only the absent jpg
+            self.assertEqual(Rpc.deleted, [])                                   # nothing deleted without --delete
+
+    def test_delete_only_verified_copies(self):
+        with tempfile.TemporaryDirectory() as dest:
+            os.makedirs(os.path.join(dest, 'M 42_sub'))
+            with open(os.path.join(dest, 'M 42_sub', 'Light_M 42_1.fit'), 'wb') as f:
+                f.write(b'older copy, wrong size')                              # "already downloaded", but differs
+            self.assertEqual(s.main(['--dest', dest, '--delete']), 1)
+            self.assertEqual(Rpc.deleted, ['MyWorks/M 42/Stacked_2_M 42.fit'])   # not the jpg, not the bad copy
+            paths = [p for p, _ in Http.log]
+            self.assertLess(paths.index('/MyWorks/M%2042/Stacked_2_M%2042.jpg'),
+                            paths.index('/MyWorks/M%2042/Stacked_2_M%2042.fit'))    # jpg before its FIT goes
 
 
 if __name__ == '__main__':
