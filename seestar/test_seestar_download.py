@@ -63,6 +63,8 @@ class Download(unittest.TestCase):
         s.HTTP_BASE = 'http://127.0.0.1:%d/' % self.http.server_address[1]
         s.RETRY_PAUSE = 0
         Http.log, Rpc.deleted = [], []
+        self.banners = []
+        s.notify = self.banners.append                                  # no real macOS banners from tests
 
     def tearDown(self):
         for srv in (self.rpc, self.http):
@@ -93,6 +95,17 @@ class Download(unittest.TestCase):
             paths = [p for p, _ in Http.log]
             self.assertLess(paths.index('/MyWorks/M%2042/Stacked_2_M%2042.jpg'),
                             paths.index('/MyWorks/M%2042/Stacked_2_M%2042.fit'))    # jpg before its FIT goes
+
+    def test_banner_when_app_drops_and_returns(self):
+        states = iter([False, False, True])                             # app gone, still gone, back
+        up, s.tunnel_up, s.WAIT = s.tunnel_up, lambda: next(states), 0
+        try:
+            s.wait_for_tunnel()
+        finally:
+            s.tunnel_up, s.WAIT = up, 30
+        self.assertEqual(len(self.banners), 2)
+        self.assertIn('lost', self.banners[0])
+        self.assertIn('again', self.banners[1])
 
 
 if __name__ == '__main__':

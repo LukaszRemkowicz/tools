@@ -5,8 +5,8 @@ While the app is connected to the scope (over Telescope Network or Wi-Fi) it ser
 computer: 127.0.0.1:4700 (JSON-RPC, used for the album list) and 127.0.0.1:40080 (the scope's HTTP file server).
 Every file is written to NAME.part first and resumed from the last byte after any interruption. See README.md.
 """
-import argparse, collections, enum, errno, http.client, json, os, socket, sys, time, urllib.error, urllib.parse
-import urllib.request
+import argparse, collections, enum, errno, http.client, json, os, socket, subprocess, sys, time, urllib.error
+import urllib.parse, urllib.request
 
 RPC_ADDR = ('127.0.0.1', 4700)
 HTTP_BASE = 'http://127.0.0.1:40080/'
@@ -69,11 +69,26 @@ def refused(e):
     return isinstance(e, ConnectionRefusedError) or isinstance(getattr(e, 'reason', None), ConnectionRefusedError)
 
 
-def wait_for_tunnel():
-    while not tunnel_up():
+def notify(text):
+    """macOS banner, so a lost connection is noticed away from the terminal. Text must not contain double quotes."""
+    if sys.platform == 'darwin':
+        subprocess.run(['osascript', '-e', 'display notification "%s" with title "Seestar download"' % text],
+                       capture_output=True, check=False)
+
+
+def wait_for_tunnel(refused_now=False):
+    """Return once the app is connected to the scope, with a banner when it is lost and when it is back."""
+    if not refused_now and tunnel_up():
+        return
+    notify('The Seestar app lost the scope. Reconnect it in the app, the download then continues by itself.')
+    while True:
         print('Seestar app is not connected to the scope (nothing on %s:%d). Connect it in the app; '
               'checking again in %d s...' % (*RPC_ADDR, WAIT), flush=True)
         time.sleep(WAIT)
+        if tunnel_up():
+            break
+    notify('The Seestar app is connected to the scope again. Download continues.')
+    print('Seestar app is connected again, continuing.', flush=True)
 
 
 def call(method, params=None):
@@ -83,9 +98,7 @@ def call(method, params=None):
             return rpc(method, params)
         except TRANSIENT as e:
             if refused(e):
-                print('Seestar app is not connected to the scope. Connect it in the app; checking again in %d s...'
-                      % WAIT, flush=True)
-                time.sleep(WAIT)
+                wait_for_tunnel(refused_now=True)
                 continue
             print('  %s failed (%s), retrying; %s' % (method, e, HINT), flush=True)
             time.sleep(RETRY_PAUSE)
@@ -193,7 +206,7 @@ def fetch(folder, name, optional, dest):
         except TRANSIENT as e:
             if refused(e) or not tunnel_up():
                 print('\r    %-56s' % ('app disconnected, will resume at %.1f MB' % (size() / 1e6)), flush=True)
-                time.sleep(WAIT if refused(e) else 0)
+                wait_for_tunnel(refused_now=refused(e))
                 continue
             stuck = 0 if size() > before else stuck + 1
             if stuck >= (1 if optional else MAX_STUCK):

@@ -27,7 +27,9 @@ here is complete. Files downloaded in an earlier run are deleted too, but only a
 here has the scope's exact size. JPG previews of stacks are never deleted by name; the scope may remove them together
 with their FIT. Deleting cannot be undone.
 
-If the app disconnects, the script waits and checks every 30 s. Reconnect the app and it carries on by itself.
+If the app disconnects, the script waits and checks every 30 s. Reconnect the app and it carries on by itself. The
+script cannot reconnect the app itself, so it shows a macOS notification when the app loses the scope and another when
+it is back.
 
 ## How it works
 
