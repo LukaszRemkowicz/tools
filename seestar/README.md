@@ -60,3 +60,31 @@ are large.
   remote observatory. These ports and RPC methods are undocumented and may change with app or firmware updates.
 
 Needs Python 3.11+ (standard library only). Tests: `python3 -m unittest seestar/test_seestar_download.py`.
+
+## seestar_relay
+
+Makes a remote Seestar appear as a LAN device to the official Seestar phone app: it answers the app's UDP discovery
+(port 4720) with this machine's address and forwards the scope's TCP ports to an upstream.
+
+    python3 seestar/seestar_relay.py --via-app [--ip ADDR]
+    python3 seestar/seestar_relay.py --upstream HOST [--ip ADDR]
+
+- `--via-app`: the upstream is the Seestar app's tunnel on this Mac. The app already listens on 4700, 4800, 4801 and
+  4804, so only TCP 80 is forwarded, to `127.0.0.1:40080` (where the app exposes the scope's HTTP server).
+- `--upstream HOST`: forwards TCP 4700, 4800, 4801, 4804 and 80 to `HOST`, the scope's address. If the Seestar app on
+  this Mac is connected it already holds those ports and the relay exits naming the busy port.
+- `--ip ADDR`: the address announced to the phone (default: this machine's LAN address).
+
+Tested on 2026-11-21 in `--via-app` mode (as a prototype) with a Seestar S50 Pro (firmware 9.75) and the iPhone
+Seestar app: discovery, control, live view, album and thumbnails worked.
+
+Requirements: the phone is on the same Wi-Fi as the machine running the relay; the iPhone has given the Seestar app the
+Local Network permission; binding port 80 works on macOS without root.
+
+Limits:
+
+- `--via-app` still goes through ZWO's Telescope Network, so it is as slow and as unstable as the Mac app itself.
+- `--upstream` is untested. It needs the scope's LAN address, e.g. reached through a Tailscale subnet route.
+- Anyone on the local network can reach the scope through the relay.
+
+Tests: `python3 -m unittest seestar/test_seestar_relay.py`.
