@@ -131,6 +131,7 @@ def main(argv=None):
                    help="upstream is the Seestar app's tunnel on this Mac (forwards only TCP 80)")
     g.add_argument('--upstream', metavar='HOST', help="forward TCP %s to this scope address" % ', '.join(map(str, SCOPE_PORTS)))
     ap.add_argument('--ip', metavar='ADDR', help='address announced to the phone (default: this machine\'s LAN address)')
+    ap.add_argument('--version', action='version', version='seestar_relay ' + seestar_download.__version__)
     a = ap.parse_args(argv)
     try:
         ip = a.ip or local_ip()

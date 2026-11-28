@@ -3,6 +3,8 @@
 set -e
 cd "$(dirname "$0")"
 APP="$(cd .. && pwd)/seestar_download.app"
+VERSION="$(sed -n "s/^__version__ = '\(.*\)'.*/\1/p" ../seestar_download.py)"   # single source: the script
+[ -n "$VERSION" ] || { echo "no __version__ in seestar_download.py" >&2; exit 1; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 for arch in arm64 x86_64; do
@@ -12,7 +14,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 lipo -create "$TMP/arm64" "$TMP/x86_64" -output "$APP/Contents/MacOS/seestar_download"
 cp AppIcon.icns ../seestar_download.py "$APP/Contents/Resources/"
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -22,8 +24,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>seestar_download</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.1</string>
-<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleShortVersionString</key><string>$VERSION</string>
+<key>CFBundleVersion</key><string>$VERSION</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>

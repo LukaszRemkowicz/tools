@@ -3,21 +3,24 @@ import AppKit
 
 // MARK: - Pure logic (self-tested)
 
-/// Keep-one-sub only makes sense together with delete, so it is ignored otherwise.
-func downloadFlags(delete: Bool, keepOneSub: Bool) -> [String] {
+/// Keep-stacks only makes sense together with delete (the script refuses it otherwise), so it is dropped then.
+func downloadFlags(delete: Bool, keepStacks: Bool) -> [String] {
     guard delete else { return [] }
-    return keepOneSub ? ["--delete", "--keep-one-sub"] : ["--delete"]
+    return keepStacks ? ["--delete", "--keep-stacks"] : ["--delete"]
 }
 
 let scriptURL = Bundle.main.resourceURL?.appendingPathComponent("seestar_download.py")
+let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
 
 func selfTest() {
     precondition(scriptURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false, "bundled script missing")
-    precondition(downloadFlags(delete: true, keepOneSub: true) == ["--delete", "--keep-one-sub"])
-    precondition(downloadFlags(delete: true, keepOneSub: false) == ["--delete"])
-    precondition(downloadFlags(delete: false, keepOneSub: false) == [])
-    precondition(downloadFlags(delete: false, keepOneSub: true) == [])
-    print("selftest ok")
+    let script = (try? String(contentsOf: scriptURL!, encoding: .utf8)) ?? ""
+    precondition(script.contains("__version__ = '\(appVersion)'"), "app and bundled script versions differ")
+    precondition(downloadFlags(delete: true, keepStacks: true) == ["--delete", "--keep-stacks"])
+    precondition(downloadFlags(delete: true, keepStacks: false) == ["--delete"])
+    precondition(downloadFlags(delete: false, keepStacks: false) == [])
+    precondition(downloadFlags(delete: false, keepStacks: true) == [])
+    print("selftest ok, version \(appVersion)")
 }
 
 /// First python3 that is 3.9 or newer (the CLI needs it).
@@ -41,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 560),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
     let deleteBox = NSButton(checkboxWithTitle: "Delete from the scope after download", target: nil, action: nil)
-    let keepBox = NSButton(checkboxWithTitle: "Keep the last sub frame on the scope (for GoTo)", target: nil, action: nil)
+    let keepBox = NSButton(checkboxWithTitle: "Keep stacks on the scope (for GoTo from the album)", target: nil, action: nil)
     let status = NSTextField(wrappingLabelWithString: "Press Start to download the photos.")
     let progress = NSProgressIndicator()
     let fileLabel = NSTextField(labelWithString: "")
@@ -86,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stack.setCustomSpacing(16, after: dest)
         for v in [status, progress, scroll] { v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true }
         window.contentView = stack
-        window.title = "Seestar download"
+        window.title = "Seestar download \(appVersion)"
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -144,11 +147,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let script = scriptURL, FileManager.default.fileExists(atPath: script.path) else {
             status.stringValue = "The download script is missing from the app. Reinstall the app."; return
         }
-        let flags = downloadFlags(delete: deleteBox.state == .on, keepOneSub: keepBox.state == .on)
+        let flags = downloadFlags(delete: deleteBox.state == .on, keepStacks: keepBox.state == .on)
         if flags.contains("--delete") {
             let a = NSAlert()
             a.messageText = "Delete photos from the scope?"
-            a.informativeText = "Each photo is deleted from the Seestar once its copy on this Mac is complete. This cannot be undone."
+            a.informativeText = (flags.contains("--keep-stacks")
+                ? "Each single frame (sub) is deleted from the Seestar once its copy on this Mac is complete. Stacks stay on the scope."
+                : "Each photo is deleted from the Seestar once its copy on this Mac is complete.") + " This cannot be undone."
             a.addButton(withTitle: "Download and delete"); a.addButton(withTitle: "Cancel")
             if a.runModal() != .alertFirstButtonReturn { return }
         }

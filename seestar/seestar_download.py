@@ -8,6 +8,7 @@ Every file is written to NAME.part first and resumed from the last byte after an
 import argparse, collections, enum, errno, http.client, json, os, socket, subprocess, sys, time, urllib.error
 import urllib.parse, urllib.request
 
+__version__ = '0.2.0'   # also read by seestar_relay.py and app/build.sh
 RPC_ADDR = ('127.0.0.1', 4700)
 HTTP_BASE = 'http://127.0.0.1:40080/'
 ROOT = 'MyWorks'
@@ -227,27 +228,27 @@ def main(argv=None):
                     default=Mode.DOWNLOAD_ONLY, help="mode %s: also delete each file from the scope once the copy "
                     "here has the scope's exact size, including files downloaded earlier; cannot be undone "
                     '(default mode: %s)' % (Mode.DOWNLOAD_AND_DELETE, Mode.DOWNLOAD_ONLY))
-    ap.add_argument('--keep-one-sub', action='store_true',
-                    help='with --delete: leave the last frame on the scope in every *_sub folder (the scope needs '
-                    'one for GoTo); it is still downloaded')
+    ap.add_argument('--keep-stacks', action='store_true',
+                    help='with --delete: delete only the single frames (*_sub folders) and keep stacks and other '
+                    'results on the scope, which needs them for GoTo from the album; they are still downloaded')
+    ap.add_argument('--version', action='version', version='seestar_download ' + __version__)
     a = ap.parse_args(argv)
     delete_after = a.mode is Mode.DOWNLOAD_AND_DELETE
+    if a.keep_stacks and not delete_after:
+        ap.error('--keep-stacks only applies together with --delete')
     dest = os.path.expanduser(a.dest)
     counts = collections.Counter()
     started = time.time()
     try:
+        print('seestar_download %s' % __version__)
         print('Saving photos to: %s' % dest)
-        print('Mode: %s%s' % (a.mode, ', keeping one sub per *_sub folder' if delete_after and a.keep_one_sub else ''))
+        print('Mode: %s%s' % (a.mode, ', keeping stacks on the scope' if a.keep_stacks else ''))
         print('Albums: %s' % (', '.join(a.folder) if a.folder else 'all'))
         print('Reading the album list from the scope...', flush=True)
         files = list(plan(a.folder))
         here = lambda folder, name: os.path.exists(os.path.join(dest, folder, name))
         print('%d files in the album, %d already downloaded.' % (len(files), sum(here(f, n) for f, n, _ in files)),
               flush=True)
-        keep = {}   # *_sub folder -> the frame left on the scope: the last one (names end with the capture time)
-        for folder, name, _ in files:
-            if a.keep_one_sub and folder.endswith('_sub') and name.endswith('.fit'):
-                keep[folder] = max(keep.get(folder, name), name)
         for i, (folder, name, optional) in enumerate(files, 1):
             print('[%d/%d] %s/%s' % (i, len(files), folder, name), flush=True)
             file_started = time.time()
@@ -259,11 +260,11 @@ def main(argv=None):
             print('\r    %-56s' % (result + timing), flush=True)
             if not delete_after or not result.startswith(COMPLETED):
                 continue
+            if a.keep_stacks and not folder.endswith('_sub'):
+                print('    left on the scope: stacks are kept (--keep-stacks)', flush=True)
+                continue
             if optional:
                 print('    left on the scope: it goes together with its FIT', flush=True)
-                continue
-            if keep.get(folder) == name:
-                print('    left on the scope: the one sub kept for GoTo', flush=True)
                 continue
             same = True   # a fresh download is renamed only at the scope's full size; an older file is re-checked
             if earlier:
