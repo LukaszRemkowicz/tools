@@ -4,11 +4,13 @@ import seestar_download as s
 
 FIT = bytes(range(256)) * 400          # 102400 bytes
 SUB = b'sub-frame' * 100
-FILES = {'/MyWorks/M%2042/Stacked_2_M%2042.fit': FIT, '/MyWorks/M%2042_sub/Light_M%2042_1.fit': SUB}
+FILES = {'/MyWorks/M%2042/Stacked_2_M%2042.fit': FIT, '/MyWorks/M%2042_sub/Light_M%2042_1.fit': SUB,
+         '/MyWorks/M%2042_sub/Light_M%2042_2.fit': SUB * 2}
 ALBUMS = {None: {'path': 'MyWorks', 'list': [{'group_name': 'DeepSky', 'files': [
               {'name': 'M 42_sub', 'count': 1, 'type': 0}, {'name': 'M 42', 'count': 1, 'type': 0}]}]},
           'MyWorks/M 42': {'list': [{'files': [{'name': 'Stacked_2_M 42.fit', 'type': 2}]}]},
-          'MyWorks/M 42_sub': {'list': [{'files': [{'name': 'Light_M 42_1.fit', 'type': 2}]}]}}
+          'MyWorks/M 42_sub': {'list': [{'files': [{'name': 'Light_M 42_2.fit', 'type': 2},
+                                                   {'name': 'Light_M 42_1.fit', 'type': 2}]}]}}
 
 
 def read(*path):
@@ -91,10 +93,18 @@ class Download(unittest.TestCase):
             with open(os.path.join(dest, 'M 42_sub', 'Light_M 42_1.fit'), 'wb') as f:
                 f.write(b'older copy, wrong size')                              # "already downloaded", but differs
             self.assertEqual(s.main(['--dest', dest, '--delete']), 1)
-            self.assertEqual(Rpc.deleted, ['MyWorks/M 42/Stacked_2_M 42.fit'])   # not the jpg, not the bad copy
+            self.assertEqual(Rpc.deleted, ['MyWorks/M 42/Stacked_2_M 42.fit',   # not the jpg, not the bad copy
+                                           'MyWorks/M 42_sub/Light_M 42_2.fit'])
             paths = [p for p, _ in Http.log]
             self.assertLess(paths.index('/MyWorks/M%2042/Stacked_2_M%2042.jpg'),
                             paths.index('/MyWorks/M%2042/Stacked_2_M%2042.fit'))    # jpg before its FIT goes
+
+    def test_keep_one_sub(self):
+        with tempfile.TemporaryDirectory() as dest:
+            self.assertEqual(s.main(['--dest', dest, '--delete', '--keep-one-sub']), 0)
+            self.assertEqual(read(dest, 'M 42_sub', 'Light_M 42_2.fit'), SUB * 2)       # kept one is downloaded too
+            self.assertEqual(Rpc.deleted, ['MyWorks/M 42/Stacked_2_M 42.fit',
+                                           'MyWorks/M 42_sub/Light_M 42_1.fit'])        # the last sub stays
 
     def test_banner_when_app_drops_and_returns(self):
         states = iter([False, False, True])                             # app gone, still gone, back

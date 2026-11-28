@@ -22,7 +22,9 @@ HINT = 'if this repeats, disconnect and reconnect the scope in the Seestar app'
 COMPLETED, NO_JPG, FAILED = 'COMPLETED', 'SKIPPED (no jpg on the scope)', 'FAILED (stalled, skipped)'
 
 
-class Mode(enum.StrEnum):
+class Mode(str, enum.Enum):   # not StrEnum: Apple's own python3 is 3.9
+    __str__ = str.__str__
+
     DOWNLOAD_ONLY = 'download_only'
     DOWNLOAD_AND_DELETE = 'download_and_delete'   # delete each file on the scope once its copy here is complete
 
@@ -225,6 +227,9 @@ def main(argv=None):
                     default=Mode.DOWNLOAD_ONLY, help="mode %s: also delete each file from the scope once the copy "
                     "here has the scope's exact size, including files downloaded earlier; cannot be undone "
                     '(default mode: %s)' % (Mode.DOWNLOAD_AND_DELETE, Mode.DOWNLOAD_ONLY))
+    ap.add_argument('--keep-one-sub', action='store_true',
+                    help='with --delete: leave the last frame on the scope in every *_sub folder (the scope needs '
+                    'one for GoTo); it is still downloaded')
     a = ap.parse_args(argv)
     delete_after = a.mode is Mode.DOWNLOAD_AND_DELETE
     dest = os.path.expanduser(a.dest)
@@ -232,13 +237,17 @@ def main(argv=None):
     started = time.time()
     try:
         print('Saving photos to: %s' % dest)
-        print('Mode: %s' % a.mode)
+        print('Mode: %s%s' % (a.mode, ', keeping one sub per *_sub folder' if delete_after and a.keep_one_sub else ''))
         print('Albums: %s' % (', '.join(a.folder) if a.folder else 'all'))
         print('Reading the album list from the scope...', flush=True)
         files = list(plan(a.folder))
         here = lambda folder, name: os.path.exists(os.path.join(dest, folder, name))
         print('%d files in the album, %d already downloaded.' % (len(files), sum(here(f, n) for f, n, _ in files)),
               flush=True)
+        keep = {}   # *_sub folder -> the frame left on the scope: the last one (names end with the capture time)
+        for folder, name, _ in files:
+            if a.keep_one_sub and folder.endswith('_sub') and name.endswith('.fit'):
+                keep[folder] = max(keep.get(folder, name), name)
         for i, (folder, name, optional) in enumerate(files, 1):
             print('[%d/%d] %s/%s' % (i, len(files), folder, name), flush=True)
             file_started = time.time()
@@ -252,6 +261,9 @@ def main(argv=None):
                 continue
             if optional:
                 print('    left on the scope: it goes together with its FIT', flush=True)
+                continue
+            if keep.get(folder) == name:
+                print('    left on the scope: the one sub kept for GoTo', flush=True)
                 continue
             same = True   # a fresh download is renamed only at the scope's full size; an older file is re-checked
             if earlier:
