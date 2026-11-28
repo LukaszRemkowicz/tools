@@ -11,21 +11,39 @@ This script resumes every file from the last byte it received and waits for you 
 ## Usage
 
 1. Open the Seestar app **on this Mac** and connect to the scope as usual.
-2. Run:
+2. Open Terminal: press `⌘ Space`, type **Terminal** and press Return. Go to this `tools` folder: type `cd `, drag
+   the folder onto the Terminal window and press Return.
+3. Download only, the photos stay on the scope:
 
        python3 seestar/seestar_download.py
 
+   Or download and delete each photo from the scope once its copy here is complete:
+
+       python3 seestar/seestar_download.py --delete
+
    Files go to `~/Pictures/Seestar/<album folder>/`. Options: `-o DIR` / `--output DIR` (where the photos go),
-   `--folder NAME` (only that album folder, repeatable, e.g. `--folder "NGC 292"`).
-3. Stop with Ctrl-C at any time. Run the same command again to continue. Finished files are skipped and a half-done
+   `--folder NAME` (only that album folder, repeatable, e.g. `--folder "NGC 292"`), `--keep-one-sub` (with
+   `--delete`, see below).
+4. Stop with Ctrl-C at any time. Run the same command again to continue. Finished files are skipped and a half-done
    file continues from its `.part`.
 
 The first lines show the target folder and the mode: `download_only` (default) or `download_and_delete`.
 
-To free the scope's storage as you go, add `--delete` (mode `download_and_delete`). Each file is then deleted from the scope right after its copy
-here is complete. Files downloaded in an earlier run are deleted too, but only after a `HEAD` request confirms the copy
-here has the scope's exact size. JPG previews of stacks are never deleted by name; the scope may remove them together
-with their FIT. Deleting cannot be undone.
+`--delete` (mode `download_and_delete`) frees the scope's storage as you go. Each file is deleted from the scope right
+after its copy here is complete. Files downloaded in an earlier run are deleted too, but only after a `HEAD` request
+confirms the copy here has the scope's exact size. JPG previews of stacks are never deleted by name; the scope may
+remove them together with their FIT. Deleting cannot be undone.
+
+`--keep-one-sub` with `--delete` leaves the last frame of every `*_sub` folder on the scope, which it needs for GoTo.
+That frame is still downloaded.
+
+## Mac app
+
+`seestar/seestar_download.app` does the same without Terminal: open it, tick **Delete from the scope after
+download** and, if wanted, **Keep the last sub frame on the scope (for GoTo)**, then press Start. It runs the copy of
+`seestar_download.py` inside the app. It needs `python3` 3.9 or newer; if macOS offers to install the Command Line
+Developer Tools on first start, accept. After changing `seestar_download.py`, rebuild the app with
+`seestar/app/build.sh`.
 
 If the app disconnects, the script waits and checks every 30 s. Reconnect the app and it carries on by itself. The
 script cannot reconnect the app itself, so it shows a macOS notification when the app loses the scope and another when
@@ -59,15 +77,24 @@ are large.
 - **Tested with** a Seestar S50 Pro (firmware 9.75) and the Seestar app 3.4.1 for Mac, at a Starlink-connected
   remote observatory. These ports and RPC methods are undocumented and may change with app or firmware updates.
 
-Needs Python 3.11+ (standard library only). Tests: `python3 -m unittest seestar/test_seestar_download.py`.
+Needs Python 3.9+ (standard library only). Tests:
+
+    python3 -m unittest seestar/test_seestar_download.py
 
 ## seestar_relay
 
 Makes a remote Seestar appear as a LAN device to the official Seestar phone app: it answers the app's UDP discovery
 (port 4720) with this machine's address and forwards the scope's TCP ports to an upstream.
 
-    python3 seestar/seestar_relay.py --via-app [--ip ADDR]
-    python3 seestar/seestar_relay.py --upstream HOST [--ip ADDR]
+Through the Seestar app's tunnel on this Mac:
+
+    python3 seestar/seestar_relay.py --via-app
+
+Straight to the scope's address (replace `HOST`):
+
+    python3 seestar/seestar_relay.py --upstream HOST
+
+Add `--ip ADDR` to either to announce a different address to the phone.
 
 - `--via-app`: the upstream is the Seestar app's tunnel on this Mac. The app already listens on 4700, 4800, 4801 and
   4804, so only TCP 80 is forwarded, to `127.0.0.1:40080` (where the app exposes the scope's HTTP server).
@@ -87,4 +114,6 @@ Limits:
 - `--upstream` is untested. It needs the scope's LAN address, e.g. reached through a Tailscale subnet route.
 - Anyone on the local network can reach the scope through the relay.
 
-Tests: `python3 -m unittest seestar/test_seestar_relay.py`.
+Tests:
+
+    python3 -m unittest seestar/test_seestar_relay.py
