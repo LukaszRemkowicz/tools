@@ -112,9 +112,11 @@
       <a href="#download">seestar_download</a>
       <a href="#usage">Usage</a>
       <a href="#app">Mac app</a>
+      <a href="#version">Version</a>
       <a href="#how">How it works</a>
       <a href="#notes">Notes</a>
       <a href="#relay">seestar_relay</a>
+      <a href="#upload">seestar_upload</a>
     </nav>
   </div>
 </header>
@@ -141,8 +143,8 @@
       Or download and delete each photo from the scope once its copy here is complete:
       <div class="block"><pre><code>python3 seestar/seestar_download.py --delete</code></pre></div>
       Files go to <code>~/Pictures/Seestar/&lt;album folder&gt;/</code>. Options: <code>-o DIR</code> / <code>--output DIR</code> (where the photos go),
-      <code>--folder NAME</code> (only that album folder, repeatable, e.g. <code>--folder "NGC 292"</code>), <code>--keep-one-sub</code> (with
-      <code>--delete</code>, see below).
+      <code>--folder NAME</code> (only that album folder, repeatable, e.g. <code>--folder "NGC 292"</code>), <code>--keep-stacks</code> (with
+      <code>--delete</code>, see below), <code>--version</code>.
     </li>
     <li>Stop with Ctrl-C at any time. Run the same command again to continue. Finished files are skipped and a half-done
     file continues from its <code>.part</code>.</li>
@@ -152,8 +154,9 @@
   after its copy here is complete. Files downloaded in an earlier run are deleted too, but only after a <code>HEAD</code> request
   confirms the copy here has the scope's exact size. JPG previews of stacks are never deleted by name; the scope may
   remove them together with their FIT. Deleting cannot be undone.</p>
-  <p><code>--keep-one-sub</code> with <code>--delete</code> leaves the last frame of every <code>*_sub</code> folder on the scope, which it needs for GoTo.
-  That frame is still downloaded.</p>
+  <p><code>--keep-stacks</code> with <code>--delete</code> deletes only the single frames in <code>*_sub</code> folders. Stacks and other results stay on the
+  scope, which needs them for GoTo from the album (open the stack in the app's album, annotate it, then GoTo). They are
+  still downloaded.</p>
   <p>If the app disconnects, the script waits and checks every 30 s. Reconnect the app and it carries on by itself. The
   script cannot reconnect the app itself, so it shows a macOS notification when the app loses the scope and another when
   it is back.</p>
@@ -163,10 +166,21 @@
   <section class="card" id="app">
   <h2>Mac app</h2>
   <p><code>seestar/seestar_download.app</code> does the same without Terminal: open it, tick <strong>Delete from the scope after
-  download</strong> and, if wanted, <strong>Keep the last sub frame on the scope (for GoTo)</strong>, then press Start. It runs the copy of
+  download</strong> and, if wanted, <strong>Keep stacks on the scope (for GoTo from the album)</strong>, then press Start. It runs the copy of
   <code>seestar_download.py</code> inside the app. It needs <code>python3</code> 3.9 or newer; if macOS offers to install the Command Line
   Developer Tools on first start, accept. After changing <code>seestar_download.py</code>, rebuild the app with
-  <code>seestar/app/build.sh</code>.</p>
+  <code>seestar/app/build.sh</code>. The window title shows the version.</p>
+  </section>
+
+  <section class="card" id="version">
+  <h2>Version</h2>
+  <p>The version lives in one place, <code>__version__</code> in <code>seestar_download.py</code>. <code>--version</code> of both scripts, the app's window
+  title and its Info.plist all take it from there; <code>build.sh</code> refuses to build without it.</p>
+  <ul>
+    <li><strong>0.2.0</strong>: <code>--keep-stacks</code> (app: <strong>Keep stacks on the scope</strong>) replaces <code>--keep-one-sub</code>, because GoTo from the
+    album works from the stack, not from a sub frame. <code>seestar_upload.py</code> puts files back on the scope. Version
+    numbers added.</li>
+  </ul>
   </section>
 
   <section class="card" id="how">
@@ -232,6 +246,32 @@
   </ul>
   <p>Tests:</p>
   <div class="block"><pre><code>python3 -m unittest seestar/test_seestar_relay.py</code></pre></div>
+  </section>
+
+  <div class="tool-head relay" id="upload"><div class="dot" aria-hidden="true">⬆️</div><h2 class="tool">seestar_upload</h2></div>
+  <section class="card">
+  <p>Uploads files back to the scope's album, for example a stack that <code>--delete</code> removed, so GoTo from the album works
+  again. The scope takes new files only on its SMB share, which the Seestar app's tunnel does not carry, so this uses
+  <a href="https://github.com/Praxeis/seestar-link">seestar-link</a> and its own connection to the scope. Install it once:</p>
+  <div class="block"><pre><code>go install github.com/Praxeis/seestar-link/cmd/seestar@latest
+seestar login</code></pre></div>
+  <p>Then upload one album folder (it goes to the album of the same name) or single files:</p>
+  <div class="block"><pre><code>python3 seestar/seestar_upload.py ~/Pictures/Seestar/"NGC 2070"</code></pre></div>
+  <ul>
+    <li>A stack (<code>Stacked_*.fit</code>) goes up with its JPG and a fresh thumbnail (<code>*_thn.jpg</code>, 532 px, made from the JPG), the
+    three files the album shows. Sub frames and photos go up alone; the album shows them without a thumbnail.</li>
+    <li><code>--to ALBUM</code> puts everything into that album folder instead of the files' own folder names.</li>
+    <li>It closes the Seestar app on this Mac first, because the scope takes one remote session, and waits 60 s for ZWO to
+    release it. Reopen the app afterwards.</li>
+    <li>The direct link through Starlink comes and goes, so a failed set-up (<code>hole-punch</code>, <code>device busy</code>) is retried up to
+    5 times, 60 s apart. Expect about 60 KB/s, roughly 15 minutes for a 50 MB stack.</li>
+    <li class="warn">A later <code>seestar_download.py --delete</code> downloads and deletes the uploaded files again, unless <code>--keep-stacks</code> keeps
+    the stacks.</li>
+  </ul>
+  <p>Tested on 2026-11-28 with a Seestar S50 Pro (firmware 9.75): one sub and the NGC 2070 stack with its JPG and thumbnail;
+  GoTo from the album worked with the stack.</p>
+  <p>Tests:</p>
+  <div class="block"><pre><code>python3 -m unittest seestar/test_seestar_upload.py</code></pre></div>
   </section>
 </main>
 <script>

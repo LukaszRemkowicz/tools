@@ -22,8 +22,8 @@ This script resumes every file from the last byte it received and waits for you 
        python3 seestar/seestar_download.py --delete
 
    Files go to `~/Pictures/Seestar/<album folder>/`. Options: `-o DIR` / `--output DIR` (where the photos go),
-   `--folder NAME` (only that album folder, repeatable, e.g. `--folder "NGC 292"`), `--keep-one-sub` (with
-   `--delete`, see below).
+   `--folder NAME` (only that album folder, repeatable, e.g. `--folder "NGC 292"`), `--keep-stacks` (with
+   `--delete`, see below), `--version`.
 4. Stop with Ctrl-C at any time. Run the same command again to continue. Finished files are skipped and a half-done
    file continues from its `.part`.
 
@@ -34,16 +34,26 @@ after its copy here is complete. Files downloaded in an earlier run are deleted 
 confirms the copy here has the scope's exact size. JPG previews of stacks are never deleted by name; the scope may
 remove them together with their FIT. Deleting cannot be undone.
 
-`--keep-one-sub` with `--delete` leaves the last frame of every `*_sub` folder on the scope, which it needs for GoTo.
-That frame is still downloaded.
+`--keep-stacks` with `--delete` deletes only the single frames in `*_sub` folders. Stacks and other results stay on the
+scope, which needs them for GoTo from the album (open the stack in the app's album, annotate it, then GoTo). They are
+still downloaded.
 
 ## Mac app
 
 `seestar/seestar_download.app` does the same without Terminal: open it, tick **Delete from the scope after
-download** and, if wanted, **Keep the last sub frame on the scope (for GoTo)**, then press Start. It runs the copy of
+download** and, if wanted, **Keep stacks on the scope (for GoTo from the album)**, then press Start. It runs the copy of
 `seestar_download.py` inside the app. It needs `python3` 3.9 or newer; if macOS offers to install the Command Line
 Developer Tools on first start, accept. After changing `seestar_download.py`, rebuild the app with
-`seestar/app/build.sh`.
+`seestar/app/build.sh`. The window title shows the version.
+
+## Version
+
+The version lives in one place, `__version__` in `seestar_download.py`. `--version` of both scripts, the app's window
+title and its Info.plist all take it from there; `build.sh` refuses to build without it.
+
+- **0.2.0**: `--keep-stacks` (app: **Keep stacks on the scope**) replaces `--keep-one-sub`, because GoTo from the
+  album works from the stack, not from a sub frame. `seestar_upload.py` puts files back on the scope. Version
+  numbers added.
 
 If the app disconnects, the script waits and checks every 30 s. Reconnect the app and it carries on by itself. The
 script cannot reconnect the app itself, so it shows a macOS notification when the app loses the scope and another when
@@ -117,3 +127,33 @@ Limits:
 Tests:
 
     python3 -m unittest seestar/test_seestar_relay.py
+
+## seestar_upload
+
+Uploads files back to the scope's album, for example a stack that `--delete` removed, so GoTo from the album works
+again. The scope takes new files only on its SMB share, which the Seestar app's tunnel does not carry, so this uses
+[seestar-link](https://github.com/Praxeis/seestar-link) and its own connection to the scope. Install it once:
+
+    go install github.com/Praxeis/seestar-link/cmd/seestar@latest
+    seestar login
+
+Then upload one album folder (it goes to the album of the same name) or single files:
+
+    python3 seestar/seestar_upload.py ~/Pictures/Seestar/"NGC 2070"
+
+- A stack (`Stacked_*.fit`) goes up with its JPG and a fresh thumbnail (`*_thn.jpg`, 532 px, made from the JPG), the
+  three files the album shows. Sub frames and photos go up alone; the album shows them without a thumbnail.
+- `--to ALBUM` puts everything into that album folder instead of the files' own folder names.
+- It closes the Seestar app on this Mac first, because the scope takes one remote session, and waits 60 s for ZWO to
+  release it. Reopen the app afterwards.
+- The direct link through Starlink comes and goes, so a failed set-up (`hole-punch`, `device busy`) is retried up to
+  5 times, 60 s apart. Expect about 60 KB/s, roughly 15 minutes for a 50 MB stack.
+- A later `seestar_download.py --delete` downloads and deletes the uploaded files again, unless `--keep-stacks` keeps
+  the stacks.
+
+Tested on 2026-11-28 with a Seestar S50 Pro (firmware 9.75): one sub and the NGC 2070 stack with its JPG and thumbnail;
+GoTo from the album worked with the stack.
+
+Tests:
+
+    python3 -m unittest seestar/test_seestar_upload.py

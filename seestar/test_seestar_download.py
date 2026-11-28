@@ -1,4 +1,4 @@
-import http.server, json, os, socketserver, sys, tempfile, threading, unittest
+import contextlib, http.server, io, json, os, socketserver, sys, tempfile, threading, unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import seestar_download as s
 
@@ -99,12 +99,19 @@ class Download(unittest.TestCase):
             self.assertLess(paths.index('/MyWorks/M%2042/Stacked_2_M%2042.jpg'),
                             paths.index('/MyWorks/M%2042/Stacked_2_M%2042.fit'))    # jpg before its FIT goes
 
-    def test_keep_one_sub(self):
+    def test_keep_stacks(self):
         with tempfile.TemporaryDirectory() as dest:
-            self.assertEqual(s.main(['--dest', dest, '--delete', '--keep-one-sub']), 0)
-            self.assertEqual(read(dest, 'M 42_sub', 'Light_M 42_2.fit'), SUB * 2)       # kept one is downloaded too
-            self.assertEqual(Rpc.deleted, ['MyWorks/M 42/Stacked_2_M 42.fit',
-                                           'MyWorks/M 42_sub/Light_M 42_1.fit'])        # the last sub stays
+            self.assertEqual(s.main(['--dest', dest, '--delete', '--keep-stacks']), 0)
+            self.assertEqual(read(dest, 'M 42', 'Stacked_2_M 42.fit'), FIT)               # the stack is downloaded
+            self.assertEqual(Rpc.deleted, ['MyWorks/M 42_sub/Light_M 42_2.fit',
+                                           'MyWorks/M 42_sub/Light_M 42_1.fit'])          # only the subs go
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                s.main(['--dest', dest, '--keep-stacks'])                                  # needs --delete
+
+    def test_version(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stdout(io.StringIO()) as out:
+            s.main(['--version'])
+        self.assertEqual(out.getvalue().strip(), 'seestar_download 0.2.0')
 
     def test_banner_when_app_drops_and_returns(self):
         states = iter([False, False, True])                             # app gone, still gone, back
